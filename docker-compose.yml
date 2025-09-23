@@ -1,35 +1,121 @@
 services:
-  cipher-api:
+  # Main application service
+  cipher-app:
     build: .
-    image: cipher-api
+    image: cipher-memory
+    container_name: cipher-app
     ports:
-      - '3000:3000'
-    environment:
-      - CIPHER_API_PREFIX=""
+      - "3000:3000"
     env_file:
       - .env
     command:
       [
         'sh',
         '-c',
-        'node dist/src/app/index.cjs --mode api --port 3000 --host 0.0.0.0 --agent /app/memAgent/cipher.yml --mcp-transport-type sse',
+        'node dist/src/app/index.cjs --mode mcp --mcp-transport-type sse --mcp-port 3000 --mcp-host 0.0.0.0 --agent /app/memAgent/cipher.yml',
       ]
     volumes:
       - ./memAgent:/app/memAgent:ro
-      - cipher-data:/app/.cipher
+      - cipher-app-data:/app/.cipher
     restart: unless-stopped
-    healthcheck:
-      test:
-        [
-          'CMD',
-          'sh',
-          '-c',
-          'wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1',
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+    depends_on:
+      - cipher-postgres
+      - cipher-qdrant
+      - cipher-neo4j
+      - cipher-redis
+    networks:
+      - cipher-network
+
+  # Redis database for fluent cache
+  cipher-redis:
+    image: redis:alpine
+    container_name: cipher-redis
+    restart: unless-stopped
+    volumes:
+      - cipher-redis-data:/data
+    command: >
+      redis-server --save 20 1 --loglevel warning --requirepass ${REDIS_PASSWORD}
+    env_file:
+      - .env
+    networks:
+      - cipher-network
+
+
+  # PostgreSQL database for persistent storage
+  cipher-postgres:
+    image: postgres:16-alpine
+    container_name: cipher-postgres
+    restart: unless-stopped
+    volumes:
+      - cipher-postgres-data:/var/lib/postgresql/data
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+    networks:
+      - cipher-network
+
+
+  # Qdrant vector database for embeddings
+  cipher-qdrant:
+    image: qdrant/qdrant:latest
+    container_name: cipher-qdrant
+    restart: unless-stopped
+    volumes:
+      - cipher-qdrant-data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: 6333
+      QDRANT__LOG_LEVEL: INFO
+    networks:
+      - cipher-network
+
+  # Neo4j graph database for knowledge graphs
+  cipher-neo4j:
+    image: neo4j:latest
+    container_name: cipher-neo4j
+    restart: unless-stopped
+    volumes:
+      - cipher-neo4j-data:/data
+      - cipher-neo4j-logs:/logs
+    env_file:
+      - .env
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER}/${NEO4J_PASSWORD}
+      NEO4J_server_config_strict__validation_enabled: false
+    networks:
+      - cipher-network
 
 volumes:
-  cipher-data:
+  # Application data
+  cipher-app-data:
+    driver: local
+    name: cipher-app-data
+
+  # Database volumes
+  cipher-redis-data:
+    driver: local
+    name: cipher-redis-data
+
+  cipher-postgres-data:
+    driver: local
+    name: cipher-postgres-data
+
+  cipher-qdrant-data:
+    driver: local
+    name: cipher-qdrant-data
+
+  cipher-neo4j-data:
+    driver: local
+    name: cipher-neo4j-data
+
+  cipher-neo4j-logs:
+    driver: local
+    name: cipher-neo4j-logs
+
+networks:
+  cipher-network:
+    driver: bridge
+    name: cipher-network
