@@ -12,17 +12,22 @@ services:
       [
         'sh',
         '-c',
-        'node dist/src/app/index.cjs --mode mcp --mcp-transport-type sse --mcp-port 3000 --mcp-host 0.0.0.0 --agent /app/memAgent/cipher.yml',
+        'node dist/src/app/index.cjs --mode mcp --mcp-transport-type sse --mcp-port 3000 --mcp-host 0.0.0.0 --agent /app/memAgent/cipher.yml ',
       ]
     volumes:
       - ./memAgent:/app/memAgent:ro
       - cipher-app-data:/app/.cipher
+      - ${PROJECT_PATH}:/workspace:ro
     restart: unless-stopped
     depends_on:
-      - cipher-postgres
-      - cipher-qdrant
-      - cipher-neo4j
-      - cipher-redis
+      cipher-postgres:
+        condition: service_started
+      cipher-qdrant:
+        condition: service_started
+      cipher-neo4j:
+        condition: service_healthy
+      cipher-redis:
+        condition: service_started
     networks:
       - cipher-network
 
@@ -33,8 +38,9 @@ services:
     restart: unless-stopped
     volumes:
       - cipher-redis-data:/data
+      - ./redis:/redis
     command: >
-      redis-server --save 20 1 --loglevel warning --requirepass ${REDIS_PASSWORD}
+      redis-server --save 20 1 --loglevel warning --aclfile /redis/user.acl
     env_file:
       - .env
     networks:
@@ -85,37 +91,38 @@ services:
     environment:
       NEO4J_AUTH: ${NEO4J_USER}/${NEO4J_PASSWORD}
       NEO4J_server_config_strict__validation_enabled: false
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "${NEO4J_USER}", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
     networks:
       - cipher-network
 
 volumes:
   # Application data
   cipher-app-data:
-    driver: local
+    external: true
     name: cipher-app-data
-
   # Database volumes
   cipher-redis-data:
-    driver: local
+    external: true
     name: cipher-redis-data
-
   cipher-postgres-data:
-    driver: local
+    external: true
     name: cipher-postgres-data
-
   cipher-qdrant-data:
-    driver: local
+    external: true
     name: cipher-qdrant-data
-
   cipher-neo4j-data:
-    driver: local
+    external: true
     name: cipher-neo4j-data
-
   cipher-neo4j-logs:
-    driver: local
+    external: true
     name: cipher-neo4j-logs
 
 networks:
   cipher-network:
-    driver: bridge
+    external: true
     name: cipher-network

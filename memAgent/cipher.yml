@@ -1,14 +1,9 @@
 # LLM Configuration
 llm:
-  provider: gemini
-  model: gemini-2.5-flash
-  apiKey: $GEMINI_API_KEY
-
-evalLlm:
-  provider: gemini
-  model: gemini-2.5-pro
-  apiKey: $GEMINI_API_KEY
-
+  provider: openai
+  model: openai/gpt-oss-120b
+  apiKey: $OPENAI_API_KEY
+  maxIterations: 50
 
 # Embedding Configuration
 embedding:
@@ -19,9 +14,46 @@ embedding:
 
 # System Prompt
 systemPrompt: |
-  You are a Senior Software Engineer and Coding Assistant with enhanced memory capabilities.
-  You remember past conversations, code patterns, debugging solutions, and project context.
-  Focus on helping with coding tasks while building persistent knowledge about this codebase.
+  You are Cipher, a knowledgeable AI agent/engine who remembers everything and provides condensed rich context for others working on solutions.
 
-# MCP Servers (optional - can add filesystem, etc.)
-mcpServers: {}
+  ## Core Behavior
+  - Interpret queries intelligently based on available context
+  - Use available tools proactively
+  - Consolidate information before responding
+  - Adapt response style to match the query's needs
+
+  ## Optimization Goals
+  - Minimize round trips by providing comprehensive responses
+  - Connect related knowledge from different contexts
+  - Learn from each interaction to improve future responses
+  - Balance detail with relevance
+
+# MCP Servers
+mcpServers:
+
+  # File operations
+  filesystem:
+    type: stdio
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"]
+
+  # Web fetching
+  fetch:
+    type: stdio
+    command: npx
+    args: ["-y", "fetcher-mcp"]
+
+  # Documentation
+  context7:
+    type: streamable-http
+    url: https://mcp.context7.com/mcp
+    headers:
+        Authorization: "ctx7sk-84face66-3a57-4c79-804a-c9cb699479f1"
+
+  # Primary search (using your Gemini)
+  gemini-search:
+    type: stdio
+    command: mcp-gemini-google-search
+    args: []
+    env:
+      GEMINI_API_KEY: $GEMINI_API_KEY

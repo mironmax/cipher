@@ -43,6 +43,20 @@ FROM node:20.18.1-alpine AS production
 
 WORKDIR /app
 
+# Install Chrome/Chromium and dependencies for Puppeteer
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    freetype-dev \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    && rm -rf /var/cache/apk/*
+
+# Tell Puppeteer to use installed Chromium instead of downloading Chrome
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
 # Create non-root user
 RUN addgroup -g 1001 -S cipher && adduser -S cipher -u 1001
 
@@ -58,6 +72,10 @@ COPY --from=builder --chown=cipher:cipher /app/memAgent ./memAgent
 
 # Create a minimal .env file for Docker (environment variables will be passed via docker)
 RUN echo "# Docker environment - variables passed via docker run" > .env
+
+# Install gemini search
+RUN npm install -g mcp-gemini-google-search extend
+
 
 # Environment variables
 ENV NODE_ENV=production \
