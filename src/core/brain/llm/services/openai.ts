@@ -248,10 +248,23 @@ export class OpenAIService implements ILLMService {
 			attempts++;
 			try {
 				// Use the new method that implements proper flow: get system prompt, compress history, format messages
-				const formattedMessages = await this.contextManager.getFormattedMessage({
+				let formattedMessages = await this.contextManager.getFormattedMessage({
 					role: 'user',
 					content: userInput,
 				});
+
+				// On retry attempts (attempts > 1), strip tool-related messages from history
+				// This prevents the LLM from trying to continue tool usage when tool_choice is 'none'
+				if (attempts > 1) {
+					formattedMessages = formattedMessages.filter((msg: any) => {
+						// Keep system and regular user/assistant messages
+						// Remove tool call results and assistant messages with tool_calls
+						if (msg.role === 'tool') return false;
+						if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) return false;
+						return true;
+					});
+					logger.debug(`Retry attempt ${attempts}: Stripped tool messages, ${formattedMessages.length} messages remaining`);
+				}
 
 				// Debug log: Show exactly what messages are being sent to OpenAI
 				logger.debug(`Sending ${formattedMessages.length} formatted messages to OpenAI:`, {
