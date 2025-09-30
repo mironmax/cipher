@@ -4,6 +4,7 @@ services:
     build: .
     image: cipher-memory
     container_name: cipher-app
+    user: "${UID:-1000}:${GID:-1000}"
     ports:
       - "3000:3000"
     env_file:
@@ -16,7 +17,8 @@ services:
       ]
     volumes:
       - ./memAgent:/app/memAgent:ro
-      - cipher-app-data:/app/.cipher
+      - ./data:/app/data
+      - ./data/logs:/tmp:rw
       - ${PROJECT_PATH}:/workspace:ro
     restart: unless-stopped
     depends_on:
@@ -26,26 +28,8 @@ services:
         condition: service_started
       cipher-neo4j:
         condition: service_healthy
-      cipher-redis:
-        condition: service_started
     networks:
       - cipher-network
-
-  # Redis database for fluent cache
-  cipher-redis:
-    image: redis:alpine
-    container_name: cipher-redis
-    restart: unless-stopped
-    volumes:
-      - cipher-redis-data:/data
-      - ./redis:/redis
-    command: >
-      redis-server --save 20 1 --loglevel warning --aclfile /redis/user.acl
-    env_file:
-      - .env
-    networks:
-      - cipher-network
-
 
   # PostgreSQL database for persistent storage
   cipher-postgres:
@@ -57,13 +41,12 @@ services:
     env_file:
       - .env
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-cipherdb}
+      POSTGRES_USER: ${POSTGRES_USER:-cipheruser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cipherpass}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
     networks:
       - cipher-network
-
 
   # Qdrant vector database for embeddings
   cipher-qdrant:
@@ -85,7 +68,7 @@ services:
     restart: unless-stopped
     volumes:
       - cipher-neo4j-data:/data
-      - cipher-neo4j-logs:/logs
+      - cipher-neo4j-data:/logs
     env_file:
       - .env
     environment:
@@ -103,26 +86,15 @@ services:
 volumes:
   # Application data
   cipher-app-data:
-    external: true
     name: cipher-app-data
   # Database volumes
-  cipher-redis-data:
-    external: true
-    name: cipher-redis-data
   cipher-postgres-data:
-    external: true
     name: cipher-postgres-data
   cipher-qdrant-data:
-    external: true
     name: cipher-qdrant-data
   cipher-neo4j-data:
-    external: true
     name: cipher-neo4j-data
-  cipher-neo4j-logs:
-    external: true
-    name: cipher-neo4j-logs
 
 networks:
   cipher-network:
-    external: true
     name: cipher-network

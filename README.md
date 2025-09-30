@@ -64,12 +64,39 @@ cd cipher
 cp .env.example .env
 # Edit .env with your API keys
 
+# Configure file permissions for your user
+echo "UID=$(id -u)" >> .env
+echo "GID=$(id -g)" >> .env
+
 # Start with Docker
 docker-compose up --build -d
 
 # Test
 curl http://localhost:3000/health
 ```
+
+#### File Permissions Setup
+
+The containers run as your user to ensure proper file permissions for logs, databases, and events. This is automatically configured via the `.env` file:
+
+```bash
+# Automatically set (works on Linux/macOS/WSL2)
+UID=$(id -u)
+GID=$(id -g)
+```
+
+These values are automatically detected when you run `id -u` and `id -g`. The configuration works across all Linux distributions (Arch, Ubuntu, Debian, Fedora, etc.), macOS, and WSL2 because UID/GID are numeric identifiers handled at the kernel level.
+
+**Platform Compatibility:**
+- ✅ Linux (all distros) - Full support
+- ✅ macOS - Full support via Docker Desktop
+- ✅ Windows WSL2 - Full support
+- ⚠️ Windows (native Docker Desktop) - May need to adjust or remove the `user:` directive in `docker-compose.yml`
+
+**Accessible Files:**
+- Logs: `./data/logs/cipher-mcp.log`
+- Events: `./data/events/events-*.jsonl`
+- Database: `./data/cipher.db` (if SQLite configured)
 
 > **💡 Note:** Docker builds automatically skip the UI build step to avoid ARM64 compatibility issues with lightningcss. The UI is not included in the Docker image by default.
 >

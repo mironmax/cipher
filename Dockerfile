@@ -43,7 +43,7 @@ FROM node:20.18.1-alpine AS production
 
 WORKDIR /app
 
-# Install Chrome/Chromium and dependencies for Puppeteer
+# Install Chrome/Chromium and dependencies for Puppeteer, plus logrotate
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -52,6 +52,7 @@ RUN apk add --no-cache \
     harfbuzz \
     ca-certificates \
     ttf-freefont \
+    logrotate \
     && rm -rf /var/cache/apk/*
 
 # Tell Puppeteer to use installed Chromium instead of downloading Chrome
@@ -69,6 +70,12 @@ COPY --from=builder --chown=cipher:cipher /app/dist ./dist
 COPY --from=builder --chown=cipher:cipher /app/node_modules ./node_modules
 COPY --from=builder --chown=cipher:cipher /app/package.json ./
 COPY --from=builder --chown=cipher:cipher /app/memAgent ./memAgent
+
+# Copy logrotate configuration and entrypoint
+COPY docker/logrotate.conf /etc/logrotate.d/cipher
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 644 /etc/logrotate.d/cipher && \
+    chmod +x /usr/local/bin/entrypoint.sh
 
 # Create a minimal .env file for Docker (environment variables will be passed via docker)
 RUN echo "# Docker environment - variables passed via docker run" > .env
@@ -91,6 +98,9 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Single port for deployment platform
 EXPOSE $PORT
+
+# Set entrypoint to handle log rotation setup
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
 # API server mode: REST APIs on single port
 CMD ["sh", "-c", "node dist/src/app/index.cjs --mode api --port $PORT --host 0.0.0.0 --agent $CONFIG_FILE"]
